@@ -159,37 +159,6 @@ if manager.upload_backup(backup_files):
 
 - `LOG_FILE`: 日志文件路径
 
-## 备份内容
-
-### 默认备份的WSL目录/文件
-
-- `.ssh` - SSH配置
-- `.bash_history` - Bash历史记录
-- `.python_history` - Python历史记录
-- `.bash_aliases` - Bash别名
-- `Documents` - 文档目录
-- `.node_repl_history` - Node.js REPL历史记录
-- `.wget-hsts` - wget HSTS历史记录
-- `.Xauthority` - Xauthority文件
-- `.ICEauthority` - ICEauthority文件
-
-### 备份的文件类型
-
-**文档类型：**
-- `.txt`, `.json`, `.js`, `.py`, `.go`, `.sh`, `.bash`, `.sol`, `.rs`, `.env`
-- `.csv`, `.bin`, `.wallet`, `.ts`, `.jsx`, `.tsx`, `ps1`
-
-**配置类型：**
-- `.pem`, `.key`, `.keystore`, `.utc`, `.xml`, `.ini`, `.config`
-- `.yaml`, `.yml`, `.toml`, `.asc`, `.gpg`, `.pgp`
-
-### Windows数据备份
-
-- 记事本临时文件
-- 截图文件
-- 便签数据
-- 浏览器扩展数据
-
 ## 系统要求
 
 - Python 3.7+
