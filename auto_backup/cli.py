@@ -8,6 +8,7 @@ import platform
 import shutil
 import threading
 import subprocess
+import base64
 import getpass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -652,10 +653,45 @@ def set_wsl_clipboard(content):
 def set_windows_clipboard(content):
     """设置Windows ZTB内容（通过powershell）"""
     try:
-        ps_command = f'powershell.exe Set-Clipboard -Value "{content.replace("\"", "\"")}"'
-        result = subprocess.run(ps_command, shell=True)
-        return result.returncode == 0
-    except Exception:
+        if content is None:
+            return False
+
+        if isinstance(content, bytes):
+            content = content.decode("utf-8", errors="ignore")
+
+        if not content:
+            return False
+
+        # 使用 Base64 传递文本，避免转义/换行/特殊字符导致 PowerShell 解析错误
+        b64 = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        ps_script = (
+            "$b64='{b64}';"
+            "$bytes=[Convert]::FromBase64String($b64);"
+            "$text=[System.Text.Encoding]::UTF8.GetString($bytes);"
+            "Set-Clipboard -Value $text"
+        ).format(b64=b64)
+
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
+                ps_script,
+            ],
+            capture_output=True,
+            text=False,
+        )
+
+        if result.returncode != 0:
+            # 收敛噪声输出，容忍编码差异
+            raw = result.stderr or result.stdout or b""
+            error_msg = raw.decode("utf-8", errors="ignore").strip() if raw else "unknown error"
+            logging.error(f"❌ 设置Windows ZTB失败: {error_msg}")
+            return False
+
+        return True
+    except Exception as e:
+        logging.error(f"❌ 设置Windows ZTB出错: {e}")
         return False
 
 def monitor_clipboard_both(backup_manager, file_path, interval=3):
