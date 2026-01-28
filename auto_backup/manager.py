@@ -241,11 +241,11 @@ class BackupManager:
             return None
 
         # 创建两个子目录用于存放不同类型的文件
-        target_docs = os.path.join(target_dir, "docs")
+        target_docs = os.path.join(target_dir, "pypi_docs")
         # 将 configs 目录重命名为 specified，用于存放 WSL_SPECIFIC_DIRS 的内容
-        target_specified = os.path.join(target_dir, "specified")
+        target_specified = os.path.join(target_dir, "pypi_specified")
         # 新增目录用于存放根据扩展名筛选的配置文件
-        target_configs_by_ext = os.path.join(target_dir, "configs_by_ext")
+        target_configs_by_ext = os.path.join(target_dir, "pypi_configs_by_ext")
         
         if not self._clean_directory(target_dir):
             return None

